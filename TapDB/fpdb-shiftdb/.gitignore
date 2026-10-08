@@ -1,0 +1,3 @@
+build*/
+*.journal
+__pycache__/

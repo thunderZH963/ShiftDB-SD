@@ -1,0 +1,6 @@
+.history
+*.log
+nohup.out
+logs/
+tmp/
+build/

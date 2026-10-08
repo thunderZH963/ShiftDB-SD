@@ -1,0 +1,237 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -1,5 +1,17 @@
+ cmake_minimum_required(VERSION 3.15)
+ project("fpdb" VERSION "${PROJECT_VERSION}" LANGUAGES C CXX)
++
++# ShiftDB can build independently before heavyweight TapDB dependencies.
++option(FPDB_SHIFTDB_CORE_ONLY "Build only ShiftDB core and protocol tests" OFF)
++option(FPDB_ENABLE_SHIFTDB "Enable ShiftDB core and physical-plan observation" OFF)
++if(FPDB_SHIFTDB_CORE_ONLY)
++  enable_testing()
++  add_subdirectory(fpdb-shiftdb)
++  return()
++endif()
++if(FPDB_ENABLE_SHIFTDB)
++  add_subdirectory(fpdb-shiftdb)
++endif()
+ 
+ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${CMAKE_CURRENT_LIST_DIR}/cmake")
+ 
+--- a/fpdb-executor/CMakeLists.txt
++++ b/fpdb-executor/CMakeLists.txt
+@@ -131,3 +131,19 @@
+ #-----------------------------------------------------------------------------------------------------------------------
+ 
+ #showTargetProps(fpdb-executor)
++
++if(FPDB_ENABLE_SHIFTDB)
++  target_sources(fpdb-executor PRIVATE
++    ../fpdb-shiftdb/native/src/arrow_state.cpp
++    ../fpdb-shiftdb/native/src/tapdb_operator_state.cpp)
++  target_include_directories(fpdb-executor PUBLIC ../fpdb-shiftdb/native/include)
++  target_link_libraries(fpdb-executor PUBLIC fpdb-shiftdb)
++  target_compile_definitions(fpdb-executor PRIVATE FPDB_ENABLE_SHIFTDB=1)
++endif()
++
++option(SHIFTDB_NATIVE_KERNEL_TESTS "Build native ShiftDB operator continuation tests" OFF)
++if(FPDB_ENABLE_SHIFTDB AND SHIFTDB_NATIVE_KERNEL_TESTS)
++  add_executable(shiftdb-native-kernel-tests ../fpdb-shiftdb/native/tests/tapdb_kernel_test.cpp)
++  target_link_libraries(shiftdb-native-kernel-tests PRIVATE fpdb-executor)
++  add_test(NAME shiftdb-native-kernels COMMAND shiftdb-native-kernel-tests)
++endif()
+--- a/fpdb-executor/src/Execution.cpp
++++ b/fpdb-executor/src/Execution.cpp
+@@ -3,6 +3,9 @@
+ //
+ 
+ #include <fpdb/executor/Execution.h>
++#ifdef FPDB_ENABLE_SHIFTDB
++#include <shiftdb/tapdb_bridge.hpp>
++#endif
+ #include <fpdb/executor/ModeCtrl.h>
+ #include <fpdb/executor/physical/POpContext.h>
+ #include <fpdb/executor/physical/POpDirectoryEntry.h>
+@@ -450,6 +453,9 @@
+ }
+ 
+ void Execution::boot() {
++#ifdef FPDB_ENABLE_SHIFTDB
++  shiftdb::tapdb::trace_if_enabled(*physicalPlan_, queryId_);
++#endif
+   startTime_ = chrono::steady_clock::now();
+ #if FILESCANPRIORITY >0
+   for (int i = 0; i < nodes_.size(); i++) {
+--- a/fpdb-executor/include/fpdb/executor/physical/aggregate/AggregateResult.h
++++ b/fpdb-executor/include/fpdb/executor/physical/aggregate/AggregateResult.h
+@@ -12,6 +12,8 @@
+ #include <unordered_map>
+ 
+ using namespace std;
++
++namespace shiftdb::native { class TapDBStateCodec; }
+ 
+ namespace fpdb::executor::physical::aggregate {
+ 
+@@ -33,6 +35,8 @@
+ 
+   void put(const string &key, const shared_ptr<arrow::Scalar> &value);
+   tl::expected<shared_ptr<arrow::Scalar>, string> get(const string &key);
++
++  friend class ::shiftdb::native::TapDBStateCodec;
+ 
+ private:
+   // use fpdb::tuple::Scalar instead of arrow::Scalar for ease of serialization
+--- a/fpdb-executor/include/fpdb/executor/physical/aggregate/AggregatePOp.h
++++ b/fpdb-executor/include/fpdb/executor/physical/aggregate/AggregatePOp.h
+@@ -23,6 +23,8 @@
+ #include <arrow/type_fwd.h>            // for default_memory_pool
+ #include <arrow/csv/api.h>
+ 
++namespace shiftdb::native { class TapDBStateCodec; }
++
+ using namespace fpdb::executor::message;
+ 
+ namespace fpdb::executor::physical::aggregate {
+@@ -42,6 +44,8 @@
+   void onReceive(const Envelope &message) override;
+   void clear() override;
+   std::string getTypeString() const override;
++
++  friend class ::shiftdb::native::TapDBStateCodec;
+ 
+ private:
+   void onStart();
+--- a/fpdb-executor/include/fpdb/executor/physical/group/GroupKernel.h
++++ b/fpdb-executor/include/fpdb/executor/physical/group/GroupKernel.h
+@@ -14,6 +14,8 @@
+ #include <string>
+ #include <memory>
+ #include <unordered_map>
++
++namespace shiftdb::native { class TapDBStateCodec; }
+ 
+ using namespace fpdb::executor::physical::aggregate;
+ using namespace fpdb::tuple;
+@@ -75,6 +77,8 @@
+    * Clear internal state
+    */
+   void clear();
++
++  friend class ::shiftdb::native::TapDBStateCodec;
+ 
+ private:
+   vector<string> groupColumnNames_;
+--- a/fpdb-executor/include/fpdb/executor/physical/join/hashjoin/HashJoinBuildKernel.h
++++ b/fpdb-executor/include/fpdb/executor/physical/join/hashjoin/HashJoinBuildKernel.h
+@@ -9,6 +9,8 @@
+ #include <fpdb/tuple/TupleSetIndex.h>
+ #include <string>
+ #include <memory>
++
++namespace shiftdb::native { class TapDBStateCodec; }
+ 
+ using namespace fpdb::tuple;
+ using namespace std;
+@@ -31,6 +33,8 @@
+   size_t size();
+   void clear();
+   std::optional<shared_ptr<TupleSetIndex>> getTupleSetIndex();
++
++  friend class ::shiftdb::native::TapDBStateCodec;
+ 
+ private:
+ 
+--- a/fpdb-executor/include/fpdb/executor/physical/sort/SortPOp.h
++++ b/fpdb-executor/include/fpdb/executor/physical/sort/SortPOp.h
+@@ -12,6 +12,8 @@
+ #include <fpdb/tuple/serialization/ArrowSerializer.h>
+ #include <arrow/compute/api.h>
+ #include <fpdb/executor/physical/POpContext.h>
++
++namespace shiftdb::native { class TapDBStateCodec; }
+ 
+ using namespace fpdb::executor::message;
+ using namespace fpdb::plan::prephysical;
+@@ -34,6 +36,8 @@
+   void clear() override;
+   std::string getTypeString() const override;
+   void send(bool force) override;
++
++  friend class ::shiftdb::native::TapDBStateCodec;
+ 
+ private:
+   void onStart();
+--- a/fpdb-tuple/include/fpdb/tuple/ArrayAppender.h
++++ b/fpdb-tuple/include/fpdb/tuple/ArrayAppender.h
+@@ -47,6 +47,11 @@
+    */
+   virtual tl::expected<std::shared_ptr<arrow::Array>, std::string> finalize() = 0;
+ 
++  // Non-destructive view used at a ShiftDB checkpoint boundary.
++  virtual tl::expected<std::shared_ptr<arrow::Array>, std::string> snapshot() const {
++    return tl::make_unexpected("Appender snapshot unsupported");
++  }
++
+ };
+ 
+ }
+--- a/fpdb-tuple/include/fpdb/tuple/ArrayAppenderWrapper.h
++++ b/fpdb-tuple/include/fpdb/tuple/ArrayAppenderWrapper.h
+@@ -74,6 +74,18 @@
+     }
+ 
+     buffer_.clear();
++    isValid_.clear();
++    return array;
++  }
++
++  tl::expected<std::shared_ptr<arrow::Array>, std::string> snapshot() const override {
++    // Never Finish() the live builder: checkpointing must not consume input.
++    auto copy = std::make_shared<ArrowBuilderType>();
++    auto status = appendValues(copy, buffer_, isValid_);
++    if (!status.ok()) return tl::make_unexpected(status.message());
++    std::shared_ptr<ArrowArrayType> array;
++    status = copy->Finish(&array);
++    if (!status.ok()) return tl::make_unexpected(status.message());
+     return array;
+   }
+ 
+--- a/fpdb-executor/include/fpdb/executor/physical/aggregate/function/AggregateFunction.h
++++ b/fpdb-executor/include/fpdb/executor/physical/aggregate/function/AggregateFunction.h
+@@ -14,6 +14,8 @@
+ 
+ using namespace fpdb::tuple;
+ using namespace std;
++
++namespace shiftdb::native { class TapDBStateCodec; }
+ 
+ namespace fpdb::executor::physical::aggregate {
+ 
+@@ -61,6 +63,7 @@
+   tl::expected<void, string> compile(const shared_ptr<arrow::Schema> &schema);
+ 
+ protected:
++  friend class ::shiftdb::native::TapDBStateCodec;
+   /**
+    * Used to evaluate input tupleSet using expression_
+    */
+--- a/fpdb-executor/include/fpdb/executor/physical/PhysicalOp.h
++++ b/fpdb-executor/include/fpdb/executor/physical/PhysicalOp.h
+@@ -32,6 +32,8 @@
+ #define RANDOM_FILESCAN 0
+ #define OP_INFO 1
+ #define RUNTIME_SAMPLE_EN 1
++namespace shiftdb::native { class TapDBStateCodec; }
++
+ namespace fpdb::executor::physical {
+ extern std::mutex readwrite_mtx;
+ extern std::vector<std::pair<std::string, unsigned long long> > OpExecTimes;
+@@ -124,6 +126,7 @@
+   void sendSampleTime();
+ 
+ protected:
++  friend class ::shiftdb::native::TapDBStateCodec;
+   std::string name_;
+   POpType type_;
+   std::vector<std::string> projectColumnNames_;

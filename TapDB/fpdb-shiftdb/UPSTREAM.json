@@ -1,0 +1,20 @@
+{
+  "repository": "https://github.com/netlab-wisconsin/TapDB",
+  "commit": "4fa813eafcb35b29723f40718d22c0a6a33c47cf",
+  "download": "GitHub codeload archive",
+  "sha256": "cf767996d12ad3ecbe267b9101ce51c64d6b71530506e51a1a9a660b2afdc1b3",
+  "original_files": {
+    "CMakeLists.txt": "11a7d7f49869d1f02e37006a175a5b05d2229ffb5b6af938dad0b8386cb04b44",
+    "fpdb-executor/CMakeLists.txt": "8b2bf60e6610ba21dd2e1ef6924927b74a0ed7db15f35231f24ccf3f328ce2fb",
+    "fpdb-executor/src/Execution.cpp": "69e652f59035d4a1943cf87f98d3f257a8417cd4a689978f76b409327e2bcb2d",
+    "fpdb-executor/include/fpdb/executor/physical/aggregate/AggregateResult.h": "d4826efc6ff6b6ee0ebd07f9e7e87df7b1b7bd2bc06a809f7c4e40a808ce1143",
+    "fpdb-executor/include/fpdb/executor/physical/aggregate/AggregatePOp.h": "ea8e2904010e955ecb288d8d17d7b0068a34372a321d78bdca282cfd3c6cb5a7",
+    "fpdb-executor/include/fpdb/executor/physical/group/GroupKernel.h": "68f4578ef7d4f9049e9199cd42f742d12132f73b318b397c06f9e1f0103df093",
+    "fpdb-executor/include/fpdb/executor/physical/join/hashjoin/HashJoinBuildKernel.h": "d6289bab0f9e0fe1b7baa140f5088552799cd008fa5e9c56fb79d5687dfdd8d2",
+    "fpdb-executor/include/fpdb/executor/physical/sort/SortPOp.h": "f8e3600b5a6795838c917c7a75bfae42d534e1b5cc6f0598a3685bfb81ca75e8",
+    "fpdb-tuple/include/fpdb/tuple/ArrayAppender.h": "5f85b8d98e4eb0d1b1acdc89e7945596457bc34256c2b4e667e4273b748d0579",
+    "fpdb-tuple/include/fpdb/tuple/ArrayAppenderWrapper.h": "f4535fee0e63cbe44c6b8283ff3eb94fc5cdd6c8e3c232523913cfa245e16fda",
+    "fpdb-executor/include/fpdb/executor/physical/aggregate/function/AggregateFunction.h": "3a022b7099c04c018133b4e0079ee84473fb26fab0a49d5059c116e4c467c1e1",
+    "fpdb-executor/include/fpdb/executor/physical/PhysicalOp.h": "a6bbd2a97a0475f6817c591588d6b9a7d93875c5fcb3f4004527d1408edbbdfd"
+  }
+}
