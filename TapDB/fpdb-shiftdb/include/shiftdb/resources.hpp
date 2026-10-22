@@ -13,6 +13,7 @@ class ResourceLedger {
  std::set<std::string> retired_;
  uint64_t version_=0;
  void expire_locked(uint64_t now);
+ void rebuild_usage_locked();
 public:
  explicit ResourceLedger(Demands capacities);
  uint64_t version() const;
@@ -27,12 +28,15 @@ struct Allocation {
  uint64_t id=0,generation=0,route=0,bytes=0;
  std::set<std::string> refs;
  bool sealed=false,done=false,credit=true;
+ // A released reference cannot be re-registered by a delayed publication retry.
+ std::set<std::string> released_refs;
 };
 class CreditLedger {
  mutable std::mutex mutex_;
  uint64_t limit_,live_=0,next_=1,slots_,busy_=0;
  std::map<uint64_t,Allocation> allocations_;
  std::map<uint64_t,uint64_t> route_refs_;
+ // Physical execution, publication, and all consumer references must close.
  void collect(Allocation&);
 public:
  CreditLedger(uint64_t bytes,uint64_t slots):limit_(bytes),slots_(slots){}

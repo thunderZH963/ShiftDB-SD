@@ -10,7 +10,7 @@ struct OperatorCost {
   std::string id, owner;
   std::set<std::string> legal;
   std::map<std::string,double> service_seconds;
-  bool pinned = false; // scans or unsupported active-state adapters
+  bool pinned = false; // explicit adapter restriction; independent of operator kind
 };
 struct EdgeCost { std::string from,to; double bytes=0; bool blocking=true; };
 struct Plan {
@@ -25,11 +25,14 @@ struct Move {
   Demands additional_demand;
 };
 struct Choice { Move move; double before=0,after=0,benefit=0,score=0; };
-// Blocking edges wait for input. Streaming edges use max(input, service),
-// explicitly a coarse overlap estimator, not an engine trace simulator.
+// Blocking inputs gate service until their producer and transfer finish.
+// Streaming inputs propagate both earliest service start and completion, allowing
+// transfer/service overlap without erasing upstream blocking dependencies. This
+// is a coarse continuation estimate, not a per-tuple trace simulator.
 double remaining_seconds(const Plan& plan);
 std::optional<Choice> best_move(const Plan&,const std::vector<Move>&,
                                 const Demands& capacity,const Demands& used,
                                 double minimum_gain=0);
+// Validate the complete resulting DAG before changing the committed plan.
 void apply_placement(Plan&,const Move&);
 }

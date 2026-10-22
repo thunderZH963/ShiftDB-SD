@@ -33,7 +33,7 @@ StatePartition::StatePartition(Kind k,uint64_t limit,uint64_t pending):max_encod
  data_.kind=k;
 }
 Image StatePartition::encode(const Data& d) {
- Writer w;w.u(0x5348494654303031ULL);w.u(1);w.u(uint64_t(d.kind));w.u(d.sequence);w.u(d.output_cursor);w.u(d.finalized);w.u(d.probe_started);
+ Writer w;w.u(0x5348494654303031ULL);w.u(2);w.u(uint64_t(d.kind));w.u(d.sequence);w.u(d.output_cursor);w.u(d.finalized);w.u(d.probe_started);w.u(d.output_ack);
  w.u(d.input.size());for(auto& [edge,seq]:d.input){w.str(edge);w.u(seq);}
  w.u(d.groups.size());for(auto& [key,g]:d.groups){w.i(key);w.i(g.sum);w.i(g.min);w.i(g.max);w.u(g.count);}
  w.u(d.rows.size());for(auto& r:d.rows)w.row(r);
@@ -43,21 +43,42 @@ Image StatePartition::encode(const Data& d) {
 StatePartition::Data StatePartition::decode(const Image& image) {
  if(checksum(image.bytes)!=image.checksum)throw std::runtime_error("state checksum mismatch");
  Reader r{image.bytes};
- if(r.u()!=0x5348494654303031ULL||r.u()!=1)throw std::runtime_error("state codec mismatch");
+ if(r.u()!=0x5348494654303031ULL)throw std::runtime_error("state codec mismatch");
+ const auto version=r.u();if(version!=1&&version!=2)throw std::runtime_error("state codec mismatch");
  Data d;auto kind=r.u();if(kind<1||kind>3)throw std::runtime_error("unsupported state kind");d.kind=Kind(kind);
  d.sequence=r.u();d.output_cursor=r.u();d.finalized=r.flag();d.probe_started=r.flag();
+ if(version==2)d.output_ack=r.u(); // Legacy images conservatively retain unacked output.
  auto n=r.count();for(uint64_t j=0;j<n;++j){auto edge=r.str();auto seq=r.u();if(!d.input.emplace(edge,seq).second)throw std::runtime_error("duplicate frontier");}
  n=r.count();for(uint64_t j=0;j<n;++j){auto key=r.i();Aggregate g;g.sum=r.i();g.min=r.i();g.max=r.i();g.count=r.u();if(!d.groups.emplace(key,g).second)throw std::runtime_error("duplicate key");}
  n=r.count();for(uint64_t j=0;j<n;++j)d.rows.push_back(r.row());
  n=r.count();for(uint64_t j=0;j<n;++j){auto a=r.i(),b=r.i();d.matches.emplace_back(a,b);}
- if(r.at!=r.b.size()||d.output_cursor>d.rows.size())throw std::runtime_error("invalid state tail");
+ if(r.at!=r.b.size()||d.output_cursor>d.rows.size()||d.output_ack>d.output_cursor)
+  throw std::runtime_error("invalid state tail");
+ uint64_t input_events=0;
+ for(const auto& [edge,seq]:d.input) {
+  if(edge.empty()||!seq||seq>UINT64_MAX-input_events)throw std::runtime_error("invalid input frontier");
+  input_events+=seq;
+ }
+ if(input_events>d.sequence)throw std::runtime_error("frontiers exceed log sequence");
+ if(d.kind!=Kind::Sort&&(d.output_cursor||d.output_ack))throw std::runtime_error("invalid output cursor kind");
+ if(d.kind==Kind::Aggregate&&(!d.rows.empty()||!d.matches.empty()||d.probe_started))
+  throw std::runtime_error("invalid aggregation image");
+ if(d.kind!=Kind::Aggregate&&!d.groups.empty())throw std::runtime_error("invalid operator groups");
+ for(const auto& [key,g]:d.groups)
+  if(g.count&&g.min>g.max)throw std::runtime_error("invalid aggregate extrema");
+ if(d.kind==Kind::Sort) {
+  if(!d.matches.empty()||d.probe_started||(!d.finalized&&d.output_cursor))
+   throw std::runtime_error("invalid sort image");
+  if(d.finalized&&!std::is_sorted(d.rows.begin(),d.rows.end(),[](const Row& a,const Row& b){return a.key<b.key;}))
+   throw std::runtime_error("finalized sort is unordered");
+ }
  return d;
 }
 void StatePartition::activate(uint64_t generation) {
- std::lock_guard<std::mutex> l(mutex_);if(!generation||generation<generation_)throw std::invalid_argument("stale generation");generation_=generation;frozen_=false;
+ std::lock_guard<std::mutex> l(mutex_);if(retired_||!generation||generation<generation_)throw std::invalid_argument("retired partition or stale generation");generation_=generation;frozen_=false;
 }
 void StatePartition::pause(){std::lock_guard<std::mutex> l(mutex_);frozen_=true;}
-void StatePartition::retire(){std::lock_guard<std::mutex> l(mutex_);auto kind=data_.kind;data_=Data{};data_.kind=kind;log_.clear();pending_.clear();logging_=false;frozen_=true;}
+void StatePartition::retire(){std::lock_guard<std::mutex> l(mutex_);auto kind=data_.kind;data_=Data{};data_.kind=kind;log_.clear();pending_.clear();logging_=false;frozen_=true;retired_=true;}
 Consume StatePartition::consume(const std::string& edge,uint64_t seq,uint64_t gen,const std::vector<Row>& rows) {
  std::lock_guard<std::mutex> l(mutex_);
  if(frozen_||gen!=generation_)return Consume::Fenced;
@@ -93,6 +114,7 @@ void StatePartition::finalize(uint64_t gen) {
  if(next.kind==Kind::Sort)std::stable_sort(next.rows.begin(),next.rows.end(),[](const Row& a,const Row& b){return a.key<b.key;});
  next.finalized=true;if(next.sequence==UINT64_MAX)throw std::overflow_error("log sequence overflow");++next.sequence;
  auto img=encode(next);
+ if(img.bytes.size()>max_encoded_bytes_)throw std::runtime_error("state exceeds encoded budget");
  if(logging_) {
   uint64_t outstanding=0;for(const auto& [seq,d]:log_)outstanding+=d.post_image.bytes.size();
   if(img.bytes.size()>max_pending_bytes_||outstanding>max_pending_bytes_-img.bytes.size())throw std::runtime_error("delta log budget exhausted; catch up before retry");
@@ -102,13 +124,15 @@ void StatePartition::finalize(uint64_t gen) {
 }
 Image StatePartition::snapshot(const std::string& ticket) {
  std::lock_guard<std::mutex> l(mutex_);if(ticket.empty()||logging_)throw std::logic_error("active snapshot or empty ticket");
- auto image=encode(data_);ticket_=ticket;log_.clear();logging_=true;return image;
+ if(retired_)throw std::logic_error("snapshot of retired partition");
+ auto image=encode(data_);if(image.bytes.size()>max_encoded_bytes_)throw std::runtime_error("state exceeds encoded budget");
+ ticket_=ticket;log_.clear();logging_=true;return image;
 }
 void StatePartition::restore(const Image& image,const std::string& ticket) {
  if(image.bytes.size()>max_encoded_bytes_)throw std::runtime_error("state exceeds encoded budget");
  auto next=decode(image);std::lock_guard<std::mutex> l(mutex_);
  if(!frozen_||next.kind!=data_.kind||ticket.empty())throw std::logic_error("invalid restore");
- data_=std::move(next);ticket_=ticket;pending_.clear();log_.clear();logging_=false;
+ data_=std::move(next);ticket_=ticket;pending_.clear();log_.clear();logging_=false;retired_=false;
 }
 uint64_t StatePartition::apply(const Delta& delta) {
  std::lock_guard<std::mutex> l(mutex_);
@@ -127,16 +151,42 @@ uint64_t StatePartition::apply(const Delta& delta) {
  }
  while(data_.sequence!=UINT64_MAX) {
   auto it=pending_.find(data_.sequence+1);if(it==pending_.end())break;
-  data_=decode(it->second.post_image);pending_.erase(it);
+  auto next=decode(it->second.post_image);
+  for(const auto& [edge,frontier]:data_.input) {
+   auto position=next.input.find(edge);
+   if(position==next.input.end()||position->second<frontier)
+    throw std::runtime_error("replay regresses an input frontier");
+  }
+  if(next.output_cursor<data_.output_cursor||next.output_ack<data_.output_ack||
+     (data_.finalized&&!next.finalized)||(data_.probe_started&&!next.probe_started))
+   throw std::runtime_error("replay regresses operator progress");
+  data_=std::move(next);pending_.erase(it);
  }
  return data_.sequence;
 }
 std::vector<Delta> StatePartition::updates()const {std::lock_guard<std::mutex> l(mutex_);std::vector<Delta> out;for(auto& [n,d]:log_)out.push_back(d);return out;}
 void StatePartition::acknowledge(uint64_t seq){std::lock_guard<std::mutex> l(mutex_);if(seq>data_.sequence)throw std::invalid_argument("ACK beyond produced sequence");log_.erase(log_.begin(),log_.upper_bound(seq));}
 uint64_t StatePartition::dirty_bytes()const{std::lock_guard<std::mutex> l(mutex_);uint64_t bytes=0;for(auto& [n,d]:log_)bytes+=d.post_image.bytes.size();return bytes;}
-Progress StatePartition::freeze(){std::lock_guard<std::mutex> l(mutex_);frozen_=true;return {data_.sequence,data_.input};}
-Progress StatePartition::progress()const{std::lock_guard<std::mutex> l(mutex_);return {data_.sequence,data_.input};}
+Progress StatePartition::freeze(){std::lock_guard<std::mutex> l(mutex_);frozen_=true;return {data_.sequence,data_.input,data_.output_cursor,data_.output_ack};}
+Progress StatePartition::progress()const{std::lock_guard<std::mutex> l(mutex_);return {data_.sequence,data_.input,data_.output_cursor,data_.output_ack};}
 void StatePartition::stop_logging(){std::lock_guard<std::mutex> l(mutex_);logging_=false;ticket_.clear();log_.clear();}
+uint64_t StatePartition::generation()const{std::lock_guard<std::mutex> l(mutex_);return generation_;}
+bool StatePartition::retired()const{std::lock_guard<std::mutex> l(mutex_);return retired_;}
+bool StatePartition::acknowledge_output(uint64_t gen,uint64_t through) {
+ std::lock_guard<std::mutex> l(mutex_);
+ if(retired_||!gen||gen!=generation_||through>data_.output_cursor)return false;
+ if(through<=data_.output_ack)return true;
+ auto next=data_;next.output_ack=through;
+ if(next.sequence==UINT64_MAX)throw std::overflow_error("log sequence overflow");
+ ++next.sequence;auto img=encode(next);
+ if(img.bytes.size()>max_encoded_bytes_)return false;
+ if(logging_) {
+  uint64_t outstanding=0;for(const auto& [seq,d]:log_)outstanding+=d.post_image.bytes.size();
+  if(img.bytes.size()>max_pending_bytes_||outstanding>max_pending_bytes_-img.bytes.size())return false;
+  log_.emplace(next.sequence,Delta{ticket_,next.sequence,img});
+ }
+ data_=std::move(next);return true;
+}
 std::map<int64_t,Aggregate> StatePartition::groups()const{std::lock_guard<std::mutex> l(mutex_);return data_.groups;}
 std::vector<std::pair<int64_t,int64_t>> StatePartition::matches()const{std::lock_guard<std::mutex> l(mutex_);return data_.matches;}
 std::vector<Row> StatePartition::sorted_rows()const{std::lock_guard<std::mutex> l(mutex_);return data_.rows;}

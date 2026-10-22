@@ -1,4 +1,34 @@
-# Local validation — 2026-09-23
+# Validation
+
+## Runtime update — 2026-10-22
+
+Environment: macOS x86_64, AppleClang 15.0.0, CMake 3.19.1; local tests only.
+
+| Check | Result |
+|---|---|
+| Release build, with Arrow IPC and native TapDB appenders | 13/13 CTest suites passed |
+| Debug core build with AddressSanitizer and UndefinedBehaviorSanitizer | 11/11 CTest suites passed |
+| Reference operator continuation | 1,160 CHECKs passed across 16 handoffs |
+| Planner regressions | 55 CHECKs passed, including upstream blocking dependency propagation |
+| Resource/credit regressions | 157 CHECKs passed, including all lifecycle event orders and concurrent reservation |
+| Handoff/ownership regressions | Passed; covers unacknowledged output, regressing replay, retired source, stale generation, journal rollback, and process exit after fsync commit |
+| Pinned TapDB originals and plan bridge source contracts | Verified |
+
+Continuation cases cover grouped integer aggregation with null payloads, duplicate-preserving inner join after build and during probing, and stable sort after partial output. Every case runs both pre-copy and stop-copy, to remote storage and Compute destinations, then compares complete results with uninterrupted execution. These endpoints are in-memory adapter instances governed by the real local ownership journal; they are not separate cluster hosts.
+
+The Arrow build uses the existing project-local Arrow 17.0.0 binary and compiles TapDB's actual `ArrayAppender` sources. Full native CAF operator continuation and Gen3-SA/Gen4-SA query performance are not established by these tests. The external Arrow binary is not sanitizer-instrumented; the 11-suite sanitizer run covers the runtime and reference adapters.
+
+To reproduce the core checks from the module directory:
+
+```sh
+./scripts/build_and_test.sh /tmp/shiftdb-release
+SHIFTDB_SANITIZE=ON SHIFTDB_BUILD_TYPE=Debug ./scripts/build_and_test.sh /tmp/shiftdb-sanitize
+python3 scripts/verify_upstream.py
+```
+
+Reference state images now use codec v2 with output acknowledgements. Restore accepts v1 conservatively with no acknowledged emitted prefix. The native Arrow envelope is unchanged. Invalid state progress or journal transitions fail closed; cancelling a failed replay discards its inactive target.
+
+## Historical validation — 2026-09-23
 
 Environment: macOS x86_64, AppleClang 15.0.0, CMake 3.19.1. Source: TapDB commit `4fa813eafcb35b29723f40718d22c0a6a33c47cf` from the pinned codeload archive. No remote cluster was used.
 

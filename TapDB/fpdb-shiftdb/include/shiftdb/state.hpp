@@ -11,7 +11,11 @@ struct Row { int64_t id=0,key=0; std::optional<int64_t> value; };
 struct Aggregate { int64_t sum=0,min=0,max=0; uint64_t count=0; };
 struct Image { std::vector<uint8_t> bytes; uint64_t checksum=0; };
 struct Delta { std::string ticket; uint64_t sequence=0; Image post_image; };
-struct Progress { uint64_t log_sequence=0; std::map<std::string,uint64_t> input; };
+struct Progress {
+ uint64_t log_sequence=0;
+ std::map<std::string,uint64_t> input;
+ uint64_t output_cursor=0,output_ack=0;
+};
 enum class Consume { Applied, Duplicate, Gap, Wait, Fenced };
 // Executable integer-key reference adapters. Not a serialization of Arrow pointers.
 // One instance represents one state partition; independently migratable partitions
@@ -23,14 +27,14 @@ class StatePartition {
   std::map<int64_t,Aggregate> groups;
   std::vector<Row> rows; // join build tuples or sorted rows
   std::vector<std::pair<int64_t,int64_t>> matches; // probe ID, build ID
-  uint64_t sequence=0,output_cursor=0;
+  uint64_t sequence=0,output_cursor=0,output_ack=0;
   bool finalized=false,probe_started=false;
  } data_;
  mutable std::mutex mutex_;
  std::string ticket_;
  std::map<uint64_t,Delta> log_,pending_;
  uint64_t generation_=0,max_encoded_bytes_,max_pending_bytes_;
- bool frozen_=true,logging_=false;
+ bool frozen_=true,logging_=false,retired_=false;
  static Image encode(const Data&);
  static Data decode(const Image&);
 public:
@@ -51,6 +55,11 @@ public:
  Progress freeze();
  Progress progress()const;
  void stop_logging();
+ uint64_t generation()const;
+ bool retired()const;
+ // Acknowledge contiguous publication at the reliable output boundary. This
+ // is separate from consumer-release credit and participates in state replay.
+ bool acknowledge_output(uint64_t generation,uint64_t through_cursor);
  std::map<int64_t,Aggregate> groups()const;
  std::vector<std::pair<int64_t,int64_t>> matches()const;
  std::vector<Row> sorted_rows()const;

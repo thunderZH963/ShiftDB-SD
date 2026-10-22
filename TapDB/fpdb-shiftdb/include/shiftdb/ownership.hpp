@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 namespace shiftdb {
 struct OwnerRecord {
@@ -15,6 +16,7 @@ struct OwnerRecord {
 class OwnershipStore {
  int fd_=-1; mutable std::mutex mutex_;bool uncertain_=false;
  std::map<std::string,OwnerRecord> records_;
+ std::map<std::string,std::set<std::string>> tickets_;
  void persist(const OwnerRecord&);
 public:
  explicit OwnershipStore(const std::string& path);

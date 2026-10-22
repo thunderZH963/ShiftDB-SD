@@ -10,13 +10,16 @@ PauseEstimate estimate_pause(uint64_t dirty,double generated,double applied,doub
 }
 Handoff::Handoff(std::string ticket,std::string op,std::string destination,StatePartition& src,
  StatePartition& dst,OwnershipStore& owners,ResourceLedger& resources):ticket_(std::move(ticket)),op_(std::move(op)),destination_(std::move(destination)),source_(src),target_(dst),owners_(owners),resources_(resources) {
- if(&src==&dst||ticket_.empty())throw std::invalid_argument("invalid handoff endpoints");
+ if(&src==&dst||ticket_.empty()||op_.empty()||destination_.empty())throw std::invalid_argument("invalid handoff endpoints");
+ for(const auto* value:{&ticket_,&op_,&destination_})
+  for(unsigned char c:*value)if(c<32||c==127)throw std::invalid_argument("invalid handoff identifier");
 }
 bool Handoff::begin(const Demands& demand,uint64_t now,uint64_t ttl,bool stop_copy) {
  if(started_)throw std::logic_error("ticket already started");
  // A new controller object must not take ownership of another active ticket.
  if(resources_.valid(ticket_,now))return false;
  auto owner=owners_.read(op_);if(owner.fenced||owner.node==destination_)return false;
+ if(source_.retired()||source_.generation()!=owner.generation)return false;
  generation_=owner.generation;source_node_=owner.node;
  if(!resources_.reserve(ticket_,demand,resources_.version(),now,ttl))return false;
  bool snapshot_started=false;
@@ -30,18 +33,28 @@ bool Handoff::begin(const Demands& demand,uint64_t now,uint64_t ttl,bool stop_co
 }
 bool Handoff::catch_up(uint64_t now) {
  if(!started_||finished_||!resources_.valid(ticket_,now))return false;
+ const auto owner=owners_.read(op_);
+ if(owner.node!=source_node_||owner.generation!=generation_||
+    (owner.fenced&&owner.ticket!=ticket_))return false;
  for(const auto& d:source_.updates())source_.acknowledge(target_.apply(d));
  return true;
 }
 bool Handoff::cutover(uint64_t now,double applied,double drain,double commit_cost,double limit,double gain,const std::function<void()>& after_commit) {
  if(!started_||finished_||!resources_.valid(ticket_,now))return false;
+ const auto owner=owners_.read(op_);
+ if(owner.node!=source_node_||owner.generation!=generation_||
+    (owner.fenced&&owner.ticket!=ticket_))return false;
  if(!std::isfinite(limit)||limit<0||!std::isfinite(gain)||gain<=0)return false;
  if(estimate_pause(source_.dirty_bytes(),0,applied,drain,commit_cost).seconds>limit)return false;
  auto final=source_.freeze();
+ // Delivery acknowledgement is separate from consumer memory release. Moving
+ // an output cursor before its publication is confirmed could lose rows.
+ if(final.output_cursor!=final.output_ack){source_.activate(generation_);return false;}
  if(estimate_pause(source_.dirty_bytes(),0,applied,drain,commit_cost).seconds>limit){source_.activate(generation_);return false;}
  if(!catch_up(now)){source_.activate(generation_);return false;}
  auto installed=target_.progress();
- if(installed.log_sequence!=final.log_sequence||installed.input!=final.input){source_.activate(generation_);return false;}
+ if(installed.log_sequence!=final.log_sequence||installed.input!=final.input||
+    installed.output_cursor!=final.output_cursor||installed.output_ack!=final.output_ack){source_.activate(generation_);return false;}
  // Convert preparation to a non-expiring hold before durable ownership changes.
  // It remains charged until target execution releases it, including on UNKNOWN.
  if(!resources_.commit(ticket_,now)){source_.activate(generation_);return false;}
