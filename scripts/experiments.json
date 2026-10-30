@@ -1,0 +1,112 @@
+{
+  "source": "TapDB",
+  "sanitize_option": "SHIFTDB_SANITIZE",
+  "cmake_args": [
+    "-DFPDB_SHIFTDB_CORE_ONLY=ON"
+  ],
+  "experiments": {
+    "planner": {
+      "target": "shiftdb-tests",
+      "executable": "fpdb-shiftdb/shiftdb-tests",
+      "args": [
+        "planner"
+      ],
+      "description": "Planner contract checks",
+      "kind": "correctness"
+    },
+    "resources": {
+      "target": "shiftdb-tests",
+      "executable": "fpdb-shiftdb/shiftdb-tests",
+      "args": [
+        "resources"
+      ],
+      "description": "Resources contract checks",
+      "kind": "correctness"
+    },
+    "state": {
+      "target": "shiftdb-tests",
+      "executable": "fpdb-shiftdb/shiftdb-tests",
+      "args": [
+        "state"
+      ],
+      "description": "State contract checks",
+      "kind": "correctness"
+    },
+    "ownership": {
+      "target": "shiftdb-tests",
+      "executable": "fpdb-shiftdb/shiftdb-tests",
+      "args": [
+        "ownership"
+      ],
+      "description": "Ownership contract checks",
+      "kind": "correctness"
+    },
+    "handoff": {
+      "target": "shiftdb-tests",
+      "executable": "fpdb-shiftdb/shiftdb-tests",
+      "args": [
+        "handoff"
+      ],
+      "description": "Handoff contract checks",
+      "kind": "correctness"
+    },
+    "bridge": {
+      "target": "shiftdb-tests",
+      "executable": "fpdb-shiftdb/shiftdb-tests",
+      "args": [
+        "bridge"
+      ],
+      "description": "Bridge contract checks",
+      "kind": "correctness"
+    },
+    "planner-regression": {
+      "target": "shiftdb-planner-regressions",
+      "executable": "fpdb-shiftdb/shiftdb-planner-regressions",
+      "args": [],
+      "description": "planner regression checks",
+      "kind": "correctness"
+    },
+    "resources-regression": {
+      "target": "shiftdb-resources-regressions",
+      "executable": "fpdb-shiftdb/shiftdb-resources-regressions",
+      "args": [],
+      "description": "resources regression checks",
+      "kind": "correctness"
+    },
+    "handoff-regression": {
+      "target": "shiftdb-handoff-regressions",
+      "executable": "fpdb-shiftdb/shiftdb-handoff-regressions",
+      "args": [],
+      "description": "handoff regression checks",
+      "kind": "correctness"
+    },
+    "estimator-regression": {
+      "target": "shiftdb-estimator-regressions",
+      "executable": "fpdb-shiftdb/shiftdb-estimator-regressions",
+      "args": [],
+      "description": "estimator regression checks",
+      "kind": "correctness"
+    },
+    "migration_gate-regression": {
+      "target": "shiftdb-migration_gate-regressions",
+      "executable": "fpdb-shiftdb/shiftdb-migration_gate-regressions",
+      "args": [],
+      "description": "migration_gate regression checks",
+      "kind": "correctness"
+    },
+    "continuation": {
+      "target": "shiftdb-operator-continuation",
+      "executable": "fpdb-shiftdb/shiftdb-operator-continuation",
+      "args": [],
+      "description": "Whole-result continuation equivalence",
+      "kind": "correctness"
+    },
+    "demo": {
+      "target": "shiftdb-demo",
+      "executable": "fpdb-shiftdb/shiftdb-demo",
+      "args": [],
+      "description": "Telemetry-to-placement and handoff example",
+      "kind": "correctness"
+    }
+  }
+}

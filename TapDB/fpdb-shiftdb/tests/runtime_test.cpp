@@ -102,6 +102,11 @@ struct FakeOp {std::string n;std::string& name(){return n;}std::string getTypeSt
 struct FakePlan {std::vector<std::shared_ptr<FakeOp>> ops;const auto& getPhysicalOps()const{return ops;}};
 void bridge_tests(){FakePlan p{{std::make_shared<FakeOp>(FakeOp{"agg\"x"})}};auto r=tapdb::describe(p);CHECK(r.size()==1&&r[0].node_id==2&&!r[0].active_migration_supported);CHECK(tapdb::quote("a\nb\"")=="\"a\\u000ab\\\"\"");}
 int main(int argc,char** argv){try{std::string suite=argc>1?argv[1]:"all";
+ const std::set<std::string> suites{"all","planner","resources","state","ownership","handoff","bridge"};
+ if(argc>2 || !suites.count(suite)) {
+  std::cerr<<"Expected one suite: all, planner, resources, state, ownership, handoff, bridge\n";
+  return 2;
+ }
  if(suite=="planner"||suite=="all")planner_tests();if(suite=="resources"||suite=="all")resources_tests();if(suite=="state"||suite=="all")state_tests();if(suite=="ownership"||suite=="all")ownership_tests();if(suite=="handoff"||suite=="all")handoff_tests();if(suite=="bridge"||suite=="all")bridge_tests();
  std::cout<<suite<<": "<<checks<<" checks passed\n";return 0;
  }catch(const std::exception& e){std::cerr<<e.what()<<'\n';return 1;}}

@@ -5,3 +5,9 @@ native-deps-venv/
 native-headers/
 TapDB/results/
 TapDB/fpdb-calcite/java/target/
+
+# Reproducible experiment outputs (regenerate locally)
+/experiment-results/
+/build/
+__pycache__/
+*.pyc

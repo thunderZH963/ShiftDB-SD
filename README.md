@@ -22,3 +22,11 @@ The core build requires CMake 3.15+ and a C++17 compiler. A full TapDB build add
 The current update fixes DAG timing through streaming operators, makes equal-score placement deterministic, and validates an entire move before changing a plan. The handoff protocol now checks source generation and contiguous output-delivery acknowledgements. State replay rejects regressing input/output frontiers, and journal recovery rejects invalid ownership transitions even when their checksums are valid. Output memory and old routes remain charged until completion, publication sealing, and the last consumer release have all arrived.
 
 Regression tests include lease expiry, all lifecycle event orders, delayed/repeated events, publication before cutover, a process exit after durable ownership commit, and whole-result continuation. See [the validation report](TapDB/fpdb-shiftdb/docs/validation.md) for the build and dependency coverage.
+
+## Reproducible experiment entry points
+
+See [EXPERIMENTS.md](EXPERIMENTS.md) for one script per host experiment, repeated runs, raw logs, build metadata, and the boundary between core checks and hardware experiments.
+
+```sh
+./scripts/experiments/run_all.sh
+```
