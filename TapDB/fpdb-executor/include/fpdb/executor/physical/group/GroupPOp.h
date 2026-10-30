@@ -51,6 +51,10 @@ public:
   GroupPOp(const GroupPOp&) = default;
   GroupPOp& operator=(const GroupPOp&) = default;
 
+#ifdef FPDB_ENABLE_SHIFTDB
+  // Actor-thread only, before final output; used by the migration codec.
+  GroupKernel& shiftStateKernel() { return kernel_; }
+#endif
   void onReceive(const Envelope &msg) override;
   void clear() override;
   std::string getTypeString() const override;

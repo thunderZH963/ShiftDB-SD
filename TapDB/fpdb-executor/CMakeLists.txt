@@ -135,10 +135,12 @@ target_link_libraries(fpdb-executor PUBLIC ibverbs)
 if(FPDB_ENABLE_SHIFTDB)
   target_sources(fpdb-executor PRIVATE
     ../fpdb-shiftdb/native/src/arrow_state.cpp
-    ../fpdb-shiftdb/native/src/tapdb_operator_state.cpp)
+    ../fpdb-shiftdb/native/src/tapdb_operator_state.cpp
+    ../fpdb-shiftdb/native/src/tapdb_actor_migration.cpp
+    ../fpdb-shiftdb/native/src/tapdb_migration_client.cpp)
   target_include_directories(fpdb-executor PUBLIC ../fpdb-shiftdb/native/include)
   target_link_libraries(fpdb-executor PUBLIC fpdb-shiftdb)
-  target_compile_definitions(fpdb-executor PRIVATE FPDB_ENABLE_SHIFTDB=1)
+  target_compile_definitions(fpdb-executor PUBLIC FPDB_ENABLE_SHIFTDB=1)
 endif()
 
 option(SHIFTDB_NATIVE_KERNEL_TESTS "Build native ShiftDB operator continuation tests" OFF)
@@ -146,4 +148,8 @@ if(FPDB_ENABLE_SHIFTDB AND SHIFTDB_NATIVE_KERNEL_TESTS)
   add_executable(shiftdb-native-kernel-tests ../fpdb-shiftdb/native/tests/tapdb_kernel_test.cpp)
   target_link_libraries(shiftdb-native-kernel-tests PRIVATE fpdb-executor)
   add_test(NAME shiftdb-native-kernels COMMAND shiftdb-native-kernel-tests)
+  add_executable(shiftdb-native-actor-tests ../fpdb-shiftdb/native/tests/tapdb_actor_migration_test.cpp)
+  target_link_libraries(shiftdb-native-actor-tests PRIVATE fpdb-executor)
+  add_test(NAME shiftdb-native-actors COMMAND shiftdb-native-actor-tests)
+  set_tests_properties(shiftdb-native-actors PROPERTIES TIMEOUT 30)
 endif()

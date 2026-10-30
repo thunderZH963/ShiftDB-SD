@@ -67,7 +67,7 @@ cmake --build build -j 4
 export SHIFTDB_PLAN_TRACE=/tmp/shiftdb-plan
 ```
 
-`Execution::boot()` writes `/tmp/shiftdb-plan-<query-id>.json` before actor construction. Use unique query IDs within a trace directory. Without the environment variable the hook does no file I/O. The flag enables the library, operator state codecs and observation; it does not enable live migration. Existing TapDB deployment and benchmark commands remain those of upstream.
+`Execution::boot()` writes `/tmp/shiftdb-plan-<query-id>.json` before actor construction. Use unique query IDs within a trace directory. Without the environment variable the hook does no file I/O. The flag enables the library, operator state codecs, observation, and opt-in Aggregate/Group actor migration RPCs. It does not automatically migrate running queries. Existing TapDB deployment and benchmark commands remain those of upstream.
 
 See [Native integration plan](docs/tapdb-integration.md) for exact implementation boundaries, and [Validation report](docs/validation.md) for the checks run in this workspace.
 
@@ -82,5 +82,43 @@ payloads survive serialization. Source appenders are not consumed by snapshots.
 See [Native operator interfaces, contracts and test commands](docs/native-operators.md).
 The local suite includes real Arrow IPC and upstream appender execution when
 the explicit dependency flags are enabled. Full native kernel tests are supplied separately for the complete
-TapDB dependency environment; they have not been executed locally. Live actor
-migration remains disabled until channel/ownership integration is complete.
+TapDB dependency environment; they have not been executed locally. The opt-in Aggregate/Group actor protocol is described below; full multi-host validation remains outstanding.
+
+## Runtime estimators (2026-10-28)
+
+`estimator.hpp` / `estimator.cpp` implement the paper's 100-ms windows,
+0.2-weight EWMA and 500-ms stale cutoff. `RateEstimator::calibrate` takes
+exactly five positive isolated-run rates and uses their median. Separate keys
+must identify operator class, node, row-width/batch configuration, or directed
+link. `observe(key, work, active_seconds, now_ms)` accumulates completed work
+and active time; a completed window uses their ratio, not the mean of sample
+ratios. `rate` closes elapsed windows. Empty windows retain the estimate but
+never refresh its age; unfinished samples cannot rejuvenate stale estimates.
+Timestamps must be monotonic per key. Use one serialized controller thread.
+
+`estimate_plan` refreshes a copy of a supplied continuation plan. It requires
+fresh current-owner service rates and current remote-edge bandwidth. Missing
+candidate rates make that destination ineligible; missing current rates return
+no plan, requiring Keep/refresh. All rates supplied to `best_move` therefore
+come from the same explicit telemetry timestamp. It does not infer remaining
+cardinalities or automatically choose unstarted-operator reference placements;
+the caller supplies those inputs and their dependencies.
+
+Memory helpers implement aligned hash-build rows plus buckets/buffers, grouped
+accumulators plus DISTINCT storage, resident sort rows/indices/merge buffers,
+and restore-state/scratch/receive/pending-update peaks. All arithmetic checks
+64-bit overflow. These are estimates using adapter-provided layouts, not an
+RSS measurement or authorization to exceed the ledger. Disk-resident sort runs
+are excluded; source memory remains a separate live allocation.
+
+The demo now connects these estimators to `best_move`, a real resource
+reservation, snapshot/replay/cutover, and full-result comparison after 100
+aggregation batches. Its fixed calibration rates are deterministic test
+fixtures, not performance measurements. Native CAF actor migration remains
+outside the validated core path described above.
+
+## Active actor migration
+
+The stop-copy actor protocol and retryable `migrate_active()` client are implemented
+for pre-output Aggregate/Group operators. See [API, protocol and validation scope](docs/active-migration.md).
+The native cross-host path still requires deployment validation.

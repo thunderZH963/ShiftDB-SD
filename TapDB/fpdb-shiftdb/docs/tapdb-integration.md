@@ -1,3 +1,9 @@
+> Update (2026-10-28): an opt-in stop-copy protocol now connects native
+> Aggregate/Group actors. See [active migration](active-migration.md) for its
+> callable API, forwarding semantics, scope and validation. The broader roadmap
+> below (durable ownership, pre-copy, release credits) is not implemented by that
+> initial actor path.
+
 > Operator checkpoint codecs have now been implemented; see
 > [native-operators.md](native-operators.md) for current coverage and calling contracts.
 > The remaining integration steps below concern live actors and distributed execution.

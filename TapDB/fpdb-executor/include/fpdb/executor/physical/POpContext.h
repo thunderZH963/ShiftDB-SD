@@ -76,7 +76,13 @@ public:
     return f.object(ctx).fields(f.field("operatorMap", ctx.operatorMap_),
                                 f.field("rootActor", ctx.rootActor_),
                                 f.field("segmentCacheActor", ctx.segmentCacheActor_),
-                                f.field("complete", ctx.complete_));
+                                f.field("complete", ctx.complete_)
+#ifdef FPDB_ENABLE_SHIFTDB
+                                ,
+                                f.field("spawnAddr", ctx.spawnAddr_),
+                                f.field("activeAddr", ctx.activeAddr_)
+#endif
+                                );
   }
 };
 

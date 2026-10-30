@@ -74,3 +74,23 @@ Local logs: `../../build-shiftdb-arrow/Testing/Temporary/LastTest.log`.
 - AddressSanitizer + UndefinedBehaviorSanitizer: all eight suites also pass in
   `../../build-shiftdb-arrow-sanitize`, with no reported sanitizer errors.
   The external prebuilt Arrow library itself is not sanitizer-instrumented.
+
+## 2026-10-28 estimator-to-handoff validation
+
+Debug and AddressSanitizer/UndefinedBehaviorSanitizer core builds each passed
+12/12 CTest cases. New estimator regression suite passed 39 checks: calibration,
+weighted service-time windows, EWMA, idle-window staleness, unfinished-window
+freshness, clock regression, missing directed routes, candidate eligibility,
+immutable input plans, and memory overflow. The demo selected a remote node
+from fixture telemetry, reserved target/path resources, copied at frontier 40,
+replayed through 47, resumed at 48, and matched all aggregation groups against
+uninterrupted execution after batch 100. No native CAF/RDMA migration or
+hardware throughput result is established by these tests.
+
+## Active actor migration update (2026-10-28)
+
+- Core Debug: 13/13 CTest cases passed.
+- Core ASan/UBSan: 13/13 CTest cases passed.
+- Native actor, RPC client, modified POpActor handler and GroupPOp continuation test: syntax checks passed with Arrow 6 source headers and CAF 0.18.5 headers. The local Arrow 17 installation supplies generated configuration headers; this is not a compatible native link validation.
+- CAF metadata instantiation for migration byte/count/context wire types: syntax checked.
+- The new native actor continuation test is supplied, not executed. Multi-host runtime and process-failure behavior are unvalidated. See active-migration.md.

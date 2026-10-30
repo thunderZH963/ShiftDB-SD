@@ -3,6 +3,9 @@
 //
 
 #include <fpdb/executor/physical/POpActor.h>
+#ifdef FPDB_ENABLE_SHIFTDB
+#include <shiftdb/tapdb_actor_migration.hpp>
+#endif
 #include <fpdb/executor/message/Envelope.h>
 #include <fpdb/executor/message/ConnectMessage.h>
 #include <fpdb/executor/message/CompleteMessage.h>
@@ -39,6 +42,9 @@ POpActor::POpActor(::caf::actor_config &cfg, std::shared_ptr<PhysicalOp> opBehav
 	opBehaviour_(std::move(opBehaviour)) {
 
   name_ = opBehaviour_->name();
+#ifdef FPDB_ENABLE_SHIFTDB
+  migration_=std::make_shared<shiftdb::native::TapDBActorMigration>(*this);
+#endif
 }
 
 ::caf::behavior behaviour(POpActor *self) {
@@ -47,6 +53,36 @@ POpActor::POpActor(::caf::actor_config &cfg, std::shared_ptr<PhysicalOp> opBehav
   ctx->operatorActor(self);
 
   return {
+#ifdef FPDB_ENABLE_SHIFTDB
+    [=](const std::string& command,const std::string& ticket,const std::string& fingerprint) -> ::caf::result<::caf::message> {
+      try {
+        if(command!="shiftdb.freeze.v1")return ::caf::make_error(::caf::sec::invalid_argument,"unknown migration command");
+        return self->migration_->freeze(ticket,fingerprint);
+      }catch(const std::exception& e){return ::caf::make_error(::caf::sec::runtime_error,e.what());}
+    },
+    [=](const std::string& command,const std::string& ticket,const std::string& fingerprint,
+        const std::vector<uint8_t>& image,const POpContext& context,
+        const std::map<std::string,int>& received,int64_t count) -> ::caf::result<bool> {
+      try {
+        if(command!="shiftdb.install.v1")return ::caf::make_error(::caf::sec::invalid_argument,"unknown migration command");
+        return self->migration_->install(ticket,fingerprint,image,std::make_shared<POpContext>(context),received,count);
+      }catch(const std::exception& e){return ::caf::make_error(::caf::sec::runtime_error,e.what());}
+    },
+    [=](const std::string& command,const std::string& ticket,const ::caf::actor& target) -> ::caf::result<bool> {
+      try {
+        if(command!="shiftdb.commit.v1")return ::caf::make_error(::caf::sec::invalid_argument,"unknown migration command");
+        return self->migration_->commit(ticket,target);
+      }catch(const std::exception& e){return ::caf::make_error(::caf::sec::runtime_error,e.what());}
+    },
+    [=](const std::string& command,const std::string& ticket) -> ::caf::result<std::string> {
+      try {
+        if(command=="shiftdb.status.v1")return self->migration_->status(ticket);
+        if(command=="shiftdb.activate.v1"){self->migration_->activate(ticket);return std::string("ACTIVE");}
+        if(command=="shiftdb.abort.v1"){self->migration_->abort(ticket);return std::string("ABORTED");}
+        return ::caf::make_error(::caf::sec::invalid_argument,"unknown migration command");
+      }catch(const std::exception& e){return ::caf::make_error(::caf::sec::runtime_error,e.what());}
+    },
+#endif
 	  [=](GetProcessingTimeAtom) {
 		auto start = std::chrono::steady_clock::now();
 		auto finish = std::chrono::steady_clock::now();
@@ -58,9 +94,15 @@ POpActor::POpActor(::caf::actor_config &cfg, std::shared_ptr<PhysicalOp> opBehav
 		std::cout << self->operator_()->name() << " receive Debug Message from TupleSet." << std::endl;
 		auto sm = make_shared<fpdb::executor::message::DebugMessage>("TupleSet");
 		fpdb::executor::message::Envelope e(sm);
+#ifdef FPDB_ENABLE_SHIFTDB
+        if(self->migration_->intercept(e))return;
+#endif
 		self->operator_()->onReceive(e);
 	  },
 	  [=](const fpdb::executor::message::Envelope &msg) {
+#ifdef FPDB_ENABLE_SHIFTDB
+        if(self->migration_->intercept(msg))return;
+#endif
 
 		auto start = std::chrono::steady_clock::now();
 

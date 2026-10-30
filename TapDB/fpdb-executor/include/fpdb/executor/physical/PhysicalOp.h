@@ -46,6 +46,11 @@ extern std::mutex cardinality_mtx;
 class PhysicalOp {
 
 public:
+#ifdef FPDB_ENABLE_SHIFTDB
+  void shiftReceivedInput(bool value) { receiveTupleSet = value; }
+  bool shiftPredicateManaged() const { return Pred2link || link2Pred; }
+#endif
+
   explicit PhysicalOp(std::string name,
                       POpType type,
                       std::vector<std::string> projectColumnNames,

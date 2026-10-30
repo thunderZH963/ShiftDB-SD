@@ -13,7 +13,7 @@ cmake --build build-shiftdb -j 4
 ./build-shiftdb/fpdb-shiftdb/shiftdb-demo
 ```
 
-The core build requires CMake 3.15+ and a C++17 compiler. A full TapDB build additionally requires TapDB's upstream dependencies. `FPDB_ENABLE_SHIFTDB=ON` enables the module and opt-in plan observation, but does not enable migration of live native CAF operators. The demo and unit tests check protocol behavior; they do not establish the paper's hardware performance results.
+The core build requires CMake 3.15+ and a C++17 compiler. A full TapDB build additionally requires TapDB's upstream dependencies. `FPDB_ENABLE_SHIFTDB=ON` enables the module, opt-in plan observation, and an explicit stop-copy API for live in-memory aggregation/group actors. Migration is caller-driven; capacity holds and a fresh compatible target actor are required. See [active migration](TapDB/fpdb-shiftdb/docs/active-migration.md) for supported operators and failure limitations. Native linking and multi-host execution have not been validated. The demo and unit tests check protocol behavior; they do not establish the paper's hardware performance results.
 
 `implementation-manifest.json` records the current module source hashes and its pinned upstream revision. The public copy replaces hard-coded Redis and sample object-store credentials with `FPDB_REDIS_PASSWORD`, `FPDB_AIRMETTLE_ACCESS_KEY`, `FPDB_AIRMETTLE_SECRET_KEY`, `FPDB_MINIO_ACCESS_KEY`, and `FPDB_MINIO_SECRET_KEY` environment variables. New builds and local dependency directories are ignored by `.gitignore`.
 

@@ -14,9 +14,19 @@
 #include <memory>
 #include <queue>
 
+#include <fpdb/executor/physical/POpContext.h>
+using ShiftBytes = std::vector<uint8_t>;
+using ShiftCounts = std::map<std::string, int>;
+
 CAF_BEGIN_TYPE_ID_BLOCK(POpActor, fpdb::caf::CAFUtil::POpActor_first_custom_type_id)
 CAF_ADD_ATOM(POpActor, GetProcessingTimeAtom)
+#ifdef FPDB_ENABLE_SHIFTDB
+CAF_ADD_TYPE_ID(POpActor, (ShiftBytes))
+CAF_ADD_TYPE_ID(POpActor, (ShiftCounts))
+#endif
 CAF_END_TYPE_ID_BLOCK(POpActor)
+
+namespace shiftdb::native { class TapDBActorMigration; }
 
 namespace fpdb::executor::physical {
 
@@ -37,6 +47,9 @@ public:
 
   long getProcessingTime() const;
   void incrementProcessingTime(long time);
+#ifdef FPDB_ENABLE_SHIFTDB
+  std::shared_ptr<shiftdb::native::TapDBActorMigration> migration_;
+#endif
   bool running_ = false;
   std::string name_;
   std::queue<std::pair<::caf::message, ::caf::strong_actor_ptr>> buffer_;

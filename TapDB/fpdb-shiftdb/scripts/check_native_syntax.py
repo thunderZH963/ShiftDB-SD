@@ -14,6 +14,6 @@ p.add_argument('--compiler',default='clang++')
 a=p.parse_args()
 m=pathlib.Path(__file__).resolve().parents[1];root=m.parent
 includes=[*map(pathlib.Path,a.include),*root.glob('*/include'),m/'native/include']
-for source in ('native/src/arrow_state.cpp','native/src/tapdb_operator_state.cpp','native/tests/tapdb_kernel_test.cpp'):
-    subprocess.run([a.compiler,'-std=c++17','-fsyntax-only',*['-I'+str(x) for x in includes],str(m/source)],check=True)
+for source in ('native/src/arrow_state.cpp','native/src/tapdb_operator_state.cpp','native/tests/tapdb_kernel_test.cpp','native/src/tapdb_actor_migration.cpp','native/src/tapdb_migration_client.cpp','native/tests/tapdb_actor_migration_test.cpp','../fpdb-executor/src/physical/POpActor.cpp'):
+    subprocess.run([a.compiler,'-std=c++17','-DFPDB_ENABLE_SHIFTDB=1','-fsyntax-only',*['-I'+str(x) for x in includes],str(m/source)],check=True)
 print('Native adapter and test syntax checks passed; not a linked/runtime test.')

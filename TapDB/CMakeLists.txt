@@ -3,7 +3,7 @@ project("fpdb" VERSION "${PROJECT_VERSION}" LANGUAGES C CXX)
 
 # ShiftDB can build independently before heavyweight TapDB dependencies.
 option(FPDB_SHIFTDB_CORE_ONLY "Build only ShiftDB core and protocol tests" OFF)
-option(FPDB_ENABLE_SHIFTDB "Enable ShiftDB core and physical-plan observation" OFF)
+option(FPDB_ENABLE_SHIFTDB "Enable ShiftDB core, codecs and opt-in actor migration" OFF)
 if(FPDB_SHIFTDB_CORE_ONLY)
   enable_testing()
   add_subdirectory(fpdb-shiftdb)

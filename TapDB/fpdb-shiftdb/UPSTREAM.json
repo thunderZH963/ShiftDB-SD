@@ -15,6 +15,10 @@
     "fpdb-tuple/include/fpdb/tuple/ArrayAppender.h": "5f85b8d98e4eb0d1b1acdc89e7945596457bc34256c2b4e667e4273b748d0579",
     "fpdb-tuple/include/fpdb/tuple/ArrayAppenderWrapper.h": "f4535fee0e63cbe44c6b8283ff3eb94fc5cdd6c8e3c232523913cfa245e16fda",
     "fpdb-executor/include/fpdb/executor/physical/aggregate/function/AggregateFunction.h": "3a022b7099c04c018133b4e0079ee84473fb26fab0a49d5059c116e4c467c1e1",
-    "fpdb-executor/include/fpdb/executor/physical/PhysicalOp.h": "a6bbd2a97a0475f6817c591588d6b9a7d93875c5fcb3f4004527d1408edbbdfd"
+    "fpdb-executor/include/fpdb/executor/physical/PhysicalOp.h": "a6bbd2a97a0475f6817c591588d6b9a7d93875c5fcb3f4004527d1408edbbdfd",
+    "fpdb-executor/include/fpdb/executor/physical/POpActor.h": "b8d86701326dce13f1233510f9f5dd624dc1cce3afd54f8f7f8a0409b674c339",
+    "fpdb-executor/include/fpdb/executor/physical/POpContext.h": "bdc1abd3de161307584a1e402b1fcda88aea56cd8cd61111deb3a52b6c836678",
+    "fpdb-executor/include/fpdb/executor/physical/group/GroupPOp.h": "ea881c2d9cbe342c162b493b975320c3deb3e3cfff6de87e87f1278a83513065",
+    "fpdb-executor/src/physical/POpActor.cpp": "1d13901a3d84d2bd1ab44c4441d520741e30d8ad3cfe7c799f95a9dc9e9713b4"
   }
 }
